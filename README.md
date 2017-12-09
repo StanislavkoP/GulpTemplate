@@ -1,8 +1,7 @@
 # GulpTemplate
 It`s gulp template for my projects(PSD to HTML).
 
-For install you need to put in console:
+For using you need to put in console
 
-npm install
-  OR
-yarn install
+1.git clone https://github.com/StanislavkoP/GulpTemplate
+2.npm install OR yarn install
