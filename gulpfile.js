@@ -5,12 +5,11 @@ var gulp = require('gulp'),
 	sass = require('gulp-sass'),
 	csso = require('gulp-csso'),
 	del = require('del'),
-	tinypng = require('gulp-tinypng'),
-	svgSprite = require('gulp-svg-sprite'),
+	svgstore = require("gulp-svgstore"),
+	imagemin = require("gulp-imagemin"),
+	webp = require("gulp-webp"),
+	rename = require("gulp-rename"),
 	uglifyjs = require('gulp-uglifyjs'),
-	rsp = require('remove-svg-properties').stream,
-	svgmin = require('gulp-svgmin'),
-	cheerio = require('gulp-cheerio'),
 	csscomb = require('gulp-csscomb'),
 	cache = require('gulp-cache'),
 	replace = require('gulp-replace'),
@@ -18,6 +17,7 @@ var gulp = require('gulp'),
 	sourcemaps = require('gulp-sourcemaps'),
 	autoprefixer = require('gulp-autoprefixer'),
 	browserSync = require('browser-sync').create(),
+	del = require('del'),
 	concat = require('gulp-concat');
 // --------------------------------------------------------Работа с browserSync
 gulp.task('serve', function() {
@@ -29,31 +29,26 @@ gulp.task('serve', function() {
 });
 
 // --------------------------------------------------------Работа с JavaScript
-
-gulp.task('libsJS:dev', () => {
-	return gulp.src(['node_modules/svg4everybody/dist/svg4everybody.min.js'])
-		.pipe(concat('libs.min.js'))
-		.pipe(gulp.dest('./build/static/js/'))
-		.pipe(browserSync.reload({
-			stream: true
-		}));
+gulp.task('main-js', () => {
+	return gulp.src([
+		'./dev/static/js/main.js',
+		])
+	.pipe(concat('main.min.js'))
+	.pipe(uglifyjs())
+	.pipe(gulp.dest('./build/static/js/'))
 });
 
-gulp.task('libsJS:build', () => {
-	return gulp.src(['node_modules/svg4everybody/dist/svg4everybody.min.js'])
-		.pipe(concat('libs.min.js'))
-		.pipe(uglifyjs())
-		.pipe(gulp.dest('./build/static/js/'));
+gulp.task('js', () => {
+	return del('main-js')
+	return gulp.src([
+		'./dev/static/js/main.min.js', // Всегда в конце
+		])
+	.pipe(concat('scripts.min.js'))
+	.pipe(uglifyjs()) // Минимизировать весь js (на выбор)
+	.pipe(gulp.dest('./build/static/js/'))
+	.pipe(browserSync.reload({stream: true}));
 });
 
-gulp.task('js:copy', () => {
-	return gulp.src(['./dev/static/js/*.js',
-					'!./dev/static/js/libs.min.js'])
-		.pipe(gulp.dest('./build/static/js/'))
-		.pipe(browserSync.reload({
-			stream: true
-		}));
-});
 // --------------------------------------------------------Работа с pug
 gulp.task('pug', ()=>  {
 	return gulp.src('./dev/pug/pages/*.pug')
@@ -71,7 +66,7 @@ gulp.task('pug', ()=>  {
 });
 // --------------------------------------------------------Работа с sass
 gulp.task('styles:build', () => {
-	return gulp.src('./dev/static/sass/main.sass')
+	return gulp.src('./dev/static/sass/main.scss')
 		.pipe(sass({
 			'include css': true
 		}))
@@ -84,7 +79,7 @@ gulp.task('styles:build', () => {
 });
 
 gulp.task('styles:dev', () => {
-	return gulp.src('./dev/static/sass/main.sass')
+	return gulp.src('./dev/static/sass/main.scss')
 		.pipe(sourcemaps.init())
 		.pipe(sass({
 			'include css': true
@@ -110,58 +105,45 @@ gulp.task('fonts', () => {
 		.pipe(gulp.dest('./build/static/fonts/'));
 });
 // --------------------------------------------------------Работа с картинка
-gulp.task('img:dev', () => {
-	return gulp.src('./dev/static/img/**/*.{png,jpg,gif}')
-		.pipe(gulp.dest('./build/static/img/'));
-});
+gulp.task("images", () => {
+	return gulp.src("./build/img/**/*{png,jpg,svg}")
+	  .pipe(imagemin([
+		imagemin.optipng({optimizationLevel: 3}),
+		imagemin.jpegtran({progressive: true}),
+		imagemin.svgo()
+	  ]))
+	  .pipe(gulp.dest("./build/img"))
+  });
 
-gulp.task('img:build', () => {
-	return gulp.src('./dev/static/img/**/*.{png,jpg,gif}')
-		.pipe(tinypng(qdY7M4kp20__KDKiEpQclOAAYrOtOPTE))
-		.pipe(gulp.dest('./build/static/img/'));
-});
-
-
-gulp.task('svg:copy', () => {
-	return gulp.src('./dev/static/img/general/*.svg')
-		.pipe(gulp.dest('./build/static/img/general/'));
+gulp.task("webp", () => {
+return gulp.src("./build/img/**/*.{png,jpg}")
+	.pipe(webp({quality: 90}))
+	.pipe(gulp.dest("./build/static/img"));
 });
 
 // --------------------------------------------------------Работа с SVG
 
-gulp.task('svg', () => {
-	return gulp.src('./dev/static/img/svg/*.svg')
-		.pipe(svgmin({
-			js2svg: {
-				pretty: true
-			}
-		}))
-		.pipe(rsp.remove({
-			properties: ['fill','stroke']
-		}))
-		.pipe(replace('&gt;', '>'))
-		.pipe(svgSprite({
-			mode: {
-				symbol: {
-					sprite: "sprite.svg"
-				}
-			}
-		}))
+gulp.task('sprite', () => {
+	return gulp.src('./dev/static/img/svg/inline-*.svg')
+	.pipe(svgstore({
+		inlineSvg: true
+	  }))
+	  .pipe(rename("sprite.svg"))
 		.pipe(gulp.dest('./build/static/img/svg/'));
 });
 
 // --------------------------------------------------------Watcher
 
-gulp.task('watch', function () {
+gulp.task('watch', () => {
 	gulp.watch('./dev/pug/**/*.pug', gulp.series('pug'));
-	gulp.watch('./dev/static/sass/**/*.sass', gulp.series('styles:dev'));
-	gulp.watch('./dev/static/img/svg/*.svg', gulp.series('svg'));
-	gulp.watch('./dev/static/js/**/*.js', gulp.series('libsJS:dev', 'js:copy'));
-	gulp.watch(['./dev/static/img/general/**/*.{png,jpg,gif}',
-				 './dev/static/img/content/**/*.{png,jpg,gif}'], gulp.series('img:dev'));
+	gulp.watch('./dev/static/sass/**/*.scss', gulp.series('styles:dev'));
+	gulp.watch('./dev/static/img/svg/*.svg', gulp.series('sprite'));
+	gulp.watch('./dev/static/js/**/*.js', gulp.series('js'));
+	gulp.watch(['./dev/static/img/general/**/*.{png,jpg,svg}',
+				 './dev/static/img/content/**/*.{png,jpg,svg}'], gulp.series('images'));
 });
 
-gulp.task('clean', function() {
+gulp.task('clean', () => {
 	return del([
 		'./build'
 	]);
@@ -169,11 +151,11 @@ gulp.task('clean', function() {
 
 gulp.task('dev', gulp.series(
     'clean',
-    gulp.parallel('styles:dev', 'pug', 'libsJS:dev', 'js:copy', 'svg', 'img:dev', 'fonts','svg:copy')));
+    gulp.parallel('styles:dev', 'pug', 'js', 'sprite', 'images','webp', 'fonts')));
 
 gulp.task('build', gulp.series(
     'clean',
-    gulp.parallel('styles:build', 'pug', 'libsJS:build', 'js:copy', 'svg', 'img:build', 'fonts','svg:copy')));
+    gulp.parallel('styles:build', 'pug', 'js', 'sprite', 'images','webp', 'fonts')));
 
 gulp.task('default', gulp.series(
     'dev',
